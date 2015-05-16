@@ -29,6 +29,6 @@ var server = net.createServer(function(socket) {
 });
 
 server.listen(function() {
-  addr.port = server.adress().port;
+  addr.port = server.address().port;
   addr.ip = os.hostname();
 });
