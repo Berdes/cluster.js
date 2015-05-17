@@ -34,8 +34,10 @@ var server = net.createServer(function(socket) {
 });
 
 function execCmd(cmd) {
-  var cmdArgs = cmd.toString().slice(0, -1).split(' ');
+  var cmdArgs = cmd.toString().trim().split(' ');
   switch(cmdArgs[0]) {
+    case '':
+      break;
     case 'l':
     case 'log':
       log.forEach(function(v) {
