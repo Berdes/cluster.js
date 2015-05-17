@@ -12,45 +12,57 @@ var log = [];
 var global = new events.EventEmitter();
 var jobs = {};
 
+function send(sock, mess) {
+  sock.write(JSON.stringify(mess)+'\0\1\2\3');
+}
+
 var server = net.createServer(function(socket) {
   var ip = socket.remoteAddress;
   if(workers[ip] !== undefined) {
     // worker already spawned, kill it
-    socket.write(JSON.stringify({action: 'kill'}));
+    send(socket, {action: 'kill'});
     socket.end();
   } else {
     var w = {socket: socket, init: false, jobs: 0};
     workers[ip] = w;
+    var buffer = "";
     socket.on('data', function(rawData) {
-      var data = JSON.parse(rawData);
-      switch(data.action) {
-        case 'log':
-          log.push(ip + ' : ' + data.log);
-          break;
-        case 'end':
-          if(data.status == 'error') {
-            log.push(util.format('Job %s ended with failure (err, out) : %s\n%s',
-                  data.job, data.err, data.output));
-          } else {
-            log.push(util.format('Job %s ended : %s', data.job, data.output));
+      buffer += rawData;
+      var slices = buffer.split('\0\1\2\3');
+      while(slices.length > 1) {
+        (function(raw) {
+          var data = JSON.parse(raw);
+          switch(data.action) {
+            case 'log':
+              log.push(ip + ' : ' + data.log);
+              break;
+            case 'end':
+              if(data.status == 'error') {
+                log.push(util.format('Job %s ended with failure (err, out) : %s\n%s',
+                      data.job, data.err, data.output));
+              } else {
+                log.push(util.format('Job %s ended : %s', data.job, data.output));
+              }
+              delete jobs[data.job];
+              w.jobs--;
+              break;
+            case 'startInfos':
+              w.init = true;
+              w.cpus = data.data.cpus;
+              w.load = data.data.load;
+              w.who = data.data.who;
+              global.emit('jobUpdate');
+              break;
+            case 'infos':
+              w.load = data.data.load;
+              w.who = data.data.who;
+              break;
+            default:
+              log.push('Unknown action ' + data.action);
           }
-          delete jobs[data.job];
-          w.jobs--;
-          break;
-        case 'startInfos':
-          w.init = true;
-          w.cpus = data.data.cpus;
-          w.load = data.data.load;
-          w.who = data.data.who;
-          global.emit('jobUpdate');
-          break;
-        case 'infos':
-          w.load = data.data.load;
-          w.who = data.data.who;
-          break;
-        default:
-          log.push('Unknown action ' + data.action);
+        })(slices.shift());
       }
+      buffer = slices[0];
     });
     socket.on('close', function() {
       delete workers[ip];
@@ -88,7 +100,7 @@ function execCmd(cmd) {
     case 'kill':
       var w = workers[cmdArgs[1]];
       if(w !== undefined) {
-        w.socket.write(JSON.stringify({action: 'kill'}));
+        send(w.socket, {action: 'kill'});
       } else {
         console.log('Unknown worker %s', cmdArgs[1]);
       }
@@ -100,7 +112,7 @@ function execCmd(cmd) {
       }
       fs.readFile(cmdArgs[1], function(err, rawTargets) {
         if(err !== null) {
-          console.log('Unknown file %s', cmdArgs[1]);
+          console.log('Unknown file %s (%s)', cmdArgs[1], err);
         } else {
           var targets = rawTargets.toString().trim().split('\n');
           targets.forEach(function(target) {
@@ -149,7 +161,7 @@ process.stdin.on('end', function() {
   process.stdout.write('Stopping all workers...');
   var i = 0;
   for(var ip in workers) {
-    workers[ip].socket.write(JSON.stringify({action: 'kill'}));
+    send(workers[ip].socket, {action: 'kill'});
     i++;
   }
   if(i == 0) {
@@ -190,7 +202,7 @@ global.on('jobUpdate', function() {
         w.jobs++;
         var jId = toLaunch.pop();
         var j = jobs[jId];
-        w.socket.write(JSON.stringify({action: 'start', cmd: j.cmd, jobId: jId}));
+        send(w.socket, {action: 'start', cmd: j.cmd, jobId: jId});
         j.status = 'running';
       }
     }

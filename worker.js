@@ -6,56 +6,68 @@ var os = require('os');
 var masterHost = process.argv[2];
 var masterPort = process.argv[3];
 
+function send(sock, mess) {
+  sock.write(JSON.stringify(mess)+'\0\1\2\3');
+}
+
 var socket = net.connect(masterPort, masterHost, function() {
+  var buffer = "";
   socket.on('data', function(rawData) {
-    var data = JSON.parse(rawData);
-    switch(data.action) {
-      case 'kill':
-        process.exit();
-        break;
-      case 'start':
-        exec(data.cmd, function(err, stdout, stderr) {
-          if(err !== null) {
-            socket.write(JSON.stringify({
-              action: 'end',
-              job: data.jobId,
-              status: 'error',
-              err: err+'\n'+stderr.toString(),
-              output: stdout.toString()
-            }));
-          } else {
-            socket.write(JSON.stringify({
-              action: 'end',
-              job: data.jobId,
-              status: 'ok',
-              output: stdout.toString()
-            }));
-          }
-        });
-        break;
-      default:
-        socket.write(JSON.stringify({action: 'log', log: 'Unknown action ' + data.action}));
+    buffer += rawData;
+    var slices = buffer.split('\0\1\2\3');
+    while(slices.length > 1) {
+      (function(raw) {
+        var data = JSON.parse(raw);
+        switch(data.action) {
+          case 'kill':
+            process.exit();
+            break;
+          case 'start':
+            exec(data.cmd, function(err, stdout, stderr) {
+              if(err !== null) {
+                send(socket, {
+                  action: 'end',
+                  job: data.jobId,
+                  status: 'error',
+                  err: err+'\n'+stderr.toString(),
+                  output: stdout.toString()
+                });
+              } else {
+                send(socket, {
+                  action: 'end',
+                  job: data.jobId,
+                  status: 'ok',
+                  output: stdout.toString()
+                });
+              }
+            });
+            break;
+          default:
+            send(socket, {action: 'log', log: 'Unknown action ' + data.action});
+        }
+      })(slices.shift());
     }
+    buffer = slices[0];
   });
   socket.on('close', function() {
     process.exit();
   });
 
-  socket.write(JSON.stringify({action: 'log', log: 'Connected'}));
-  socket.write(JSON.stringify({action: 'startInfos', data: {
+  send(socket, {action: 'log', log: 'Connected'});
+  send(socket, {action: 'startInfos', data: {
     cpus: os.cpus().length,
     load: os.loadavg(),
     who: parseInt(execSync('who | wc -l').toString().trim())
-  }}));
+  }});
   setInterval(function() {
-    socket.write(JSON.stringify({action: 'infos', data: {
+    send(socket, {action: 'infos', data: {
       load: os.loadavg(),
       who: parseInt(execSync('who | wc -l').toString().trim())
-    }}));
+    }});
   }, 10000);
 });
 
 process.on('uncaughtException', function(err) {
-  socket.write(JSON.stringify({action: 'log', log: 'Worker uncaughtException : ' + err}));
+  send(socket, {action: 'log', log: 'Worker uncaughtException : ' + err});
   process.exit();
 });
