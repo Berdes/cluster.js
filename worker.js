@@ -16,19 +16,19 @@ var socket = net.connect(masterPort, masterHost, function() {
       case 'start':
         exec(data.cmd, function(err, stdout, stderr) {
           if(err !== null) {
-            process.stdout.write(JSON.stringify({
+            socket.write(JSON.stringify({
               action: 'end',
               job: data.jobId,
               status: 'error',
-              err: err+'\n'+stderr,
-              output: stdout
+              err: err+'\n'+stderr.toString(),
+              output: stdout.toString()
             }));
           } else {
-            process.stdout.write(JSON.stringify({
+            socket.write(JSON.stringify({
               action: 'end',
               job: data.jobId,
               status: 'ok',
-              output: stdout
+              output: stdout.toString()
             }));
           }
         });
@@ -43,12 +43,14 @@ var socket = net.connect(masterPort, masterHost, function() {
 
   socket.write(JSON.stringify({action: 'log', log: 'Connected'}));
   socket.write(JSON.stringify({action: 'startInfos', data: {
-    cpus: os.cpus().length
+    cpus: os.cpus().length,
+    load: os.loadavg(),
+    who: parseInt(execSync('who | wc -l').toString().trim())
   }}));
   setInterval(function() {
     socket.write(JSON.stringify({action: 'infos', data: {
       load: os.loadavg(),
-      who: execSync('who | wc -l').toString()
+      who: parseInt(execSync('who | wc -l').toString().trim())
     }}));
   }, 10000);
 });

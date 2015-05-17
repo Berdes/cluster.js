@@ -4,6 +4,7 @@ var spawn = require('child_process').spawn;
 var events = require('events');
 var fs = require('fs');
 var crypto = require('crypto');
+var util = require('util');
 
 var workers = {};
 var addr = {};
@@ -18,7 +19,8 @@ var server = net.createServer(function(socket) {
     socket.write(JSON.stringify({action: 'kill'}));
     socket.end();
   } else {
-    workers[ip] = {socket: socket};
+    var w = {socket: socket, init: false, jobs: 0};
+    workers[ip] = w;
     socket.on('data', function(rawData) {
       var data = JSON.parse(rawData);
       switch(data.action) {
@@ -27,11 +29,25 @@ var server = net.createServer(function(socket) {
           break;
         case 'end':
           if(data.status == 'error') {
-            log.push('Job %s ended with failure (err, out) : %s\n%s', data.job, data.err, data.output);
+            log.push(util.format('Job %s ended with failure (err, out) : %s\n%s',
+                  data.job, data.err, data.output));
           } else {
-            log.push('Job %s ended : %s', data.job, data.output);
+            log.push(util.format('Job %s ended : %s', data.job, data.output));
           }
           delete jobs[data.job];
+          w.jobs--;
+          break;
+        case 'startInfos':
+          w.init = true;
+          w.cpus = data.data.cpus;
+          w.load = data.data.load;
+          w.who = data.data.who;
+          global.emit('jobUpdate');
+          break;
+        case 'infos':
+          w.load = data.data.load;
+          w.who = data.data.who;
+          break;
         default:
           log.push('Unknown action ' + data.action);
       }
@@ -59,7 +75,12 @@ function execCmd(cmd) {
     case 'list':
       var i = 0;
       for(var ip in workers) {
-        console.log(ip);
+        var w = workers[ip];
+        if(w.init) {
+          console.log('%s : %d %d %d %s/%s', ip, w.load[0], w.load[1], w.load[2], w.jobs, w.cpus);
+        } else {
+          console.log(ip);
+        }
         i++;
       }
       console.log('Total %d', i);
@@ -88,6 +109,7 @@ function execCmd(cmd) {
         }
       });
       break;
+    case 'j':
     case 'jobs':
       for(var id in jobs) {
         console.log('%s (%s) : %s', id, jobs[id].status, jobs[id].cmd);
@@ -102,11 +124,12 @@ function execCmd(cmd) {
   process.stdout.write('> ');
 }
 
-function newJob(cmd) {
+function newJob(cmd, affinity) {
   var id = crypto.pseudoRandomBytes(8).toString('hex');
   jobs[id] = {
     cmd: cmd,
-    status: 'prelaunch'
+    status: 'prelaunch',
+    affinity: affinity
   };
   global.emit('jobUpdate');
 }
@@ -151,5 +174,25 @@ global.on('deletedWorker', function() {
 });
 
 global.on('jobUpdate', function() {
-  
+  var toLaunch = [];
+  for(var id in jobs) {
+    if(jobs[id].status == 'prelaunch' && jobs[id].affinity === undefined) {
+      toLaunch.push(id);
+    }
+  }
+  for(var ip in workers) {
+    if(toLaunch.length == 0) {
+      break;
+    }
+    var w = workers[ip];
+    if(w.init) {
+      while(w.jobs < w.cpus - 1 && toLaunch.length > 0) {
+        w.jobs++;
+        var jId = toLaunch.pop();
+        var j = jobs[jId];
+        w.socket.write(JSON.stringify({action: 'start', cmd: j.cmd, jobId: jId}));
+        j.status = 'running';
+      }
+    }
+  }
 });
