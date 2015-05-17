@@ -49,6 +49,7 @@ var server = net.createServer(function(socket) {
             case 'startInfos':
               w.init = true;
               w.cpus = data.data.cpus;
+              w.hostname = data.data.hostname;
               w.load = data.data.load;
               w.who = data.data.who;
               global.emit('jobUpdate');
@@ -89,7 +90,13 @@ function execCmd(cmd) {
       for(var ip in workers) {
         var w = workers[ip];
         if(w.init) {
-          console.log('%s : %d %d %d %s/%s', ip, w.load[0], w.load[1], w.load[2], w.jobs, w.cpus);
+          console.log('%s : %d %d %d %s/%s',
+              w.hostname,
+              Math.round(w.load[0]*100)/100,
+              Math.round(w.load[1]*100)/100,
+              Math.round(w.load[2]*100)/100,
+              w.jobs,
+              w.cpus);
         } else {
           console.log(ip);
         }

@@ -56,6 +56,7 @@ var socket = net.connect(masterPort, masterHost, function() {
   send(socket, {action: 'log', log: 'Connected'});
   send(socket, {action: 'startInfos', data: {
     cpus: os.cpus().length,
+    hostname: os.hostname(),
     load: os.loadavg(),
     who: parseInt(execSync('who | wc -l').toString().trim())
   }});
