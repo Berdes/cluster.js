@@ -8,7 +8,7 @@ var masterPort = process.argv[4];
 
 fs.readFile('config.json', function(rawConfig) {
   var config = JSON.parse(rawConfig);
-  exec(['ssh', targetHost, config.startWorker.Cmd, masterHost, masterPort].join(' '),
+  exec(['ssh', targetHost, config.startWorker.cmd, masterHost, masterPort].join(' '),
        config.startWorker.options,
        function(err, stdout, stderr) {
     if(err !== null) {
