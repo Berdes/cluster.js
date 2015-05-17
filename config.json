@@ -1,0 +1,3 @@
+{
+  "startWorkerCmd": "/home/user/cluster.js/startWorker.sh"
+}
