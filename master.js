@@ -116,13 +116,7 @@ server.listen(function() {
   addr.ip = os.hostname();
   console.log('Stated server at %s:%d', addr.ip, addr.port);
   process.stdout.write('Starting local worker...');
-  var worker = spawn('node', ['worker.js', addr.ip, addr.port]);
-  worker.on('error', function(err) {
-    log.push('Local worker error : ' + err);
-  });
-  worker.on('end', function(code) {
-    log.push('Local worker ended with status ' + code);
-  });
+  spawn('node', ['worker.js', addr.ip, addr.port]);
   process.stdout.write(' done\n');
   process.stdout.write('> ');
   process.stdin.on('data', execCmd);
@@ -157,5 +151,5 @@ global.on('deletedWorker', function() {
 });
 
 global.on('jobUpdate', function() {
-
+  
 });

@@ -1,5 +1,6 @@
 var net = require('net');
 var exec = require('child_process').exec;
+var execSync = require('child_process').execSync;
 var os = require('os');
 
 var masterHost = process.argv[2];
@@ -50,4 +51,9 @@ var socket = net.connect(masterPort, masterHost, function() {
       who: execSync('who | wc -l').toString()
     }}));
   }, 10000);
+});
+
+process.on('uncaughtException', function(err) {
+  socket.write(JSON.stringify({action: 'log', log: 'Worker uncaughtException : ' + err}));
+  process.exit();
 });
