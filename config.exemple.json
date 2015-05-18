@@ -1,0 +1,10 @@
+{
+  "pwd": "/home/user/cluster.js",
+  "ssh_options": "-o StrictHostKeyChecking=no",
+  "startWorker": {
+    "cmd": "/home/user/cluster.js/startWorker.sh",
+    "options": {
+      "timeout": 5000
+    }
+  }
+}

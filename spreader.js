@@ -13,7 +13,7 @@ fs.readFile('config.json', function(err, rawConfig) {
     process.exit(1);
   }
   var config = JSON.parse(rawConfig);
-  exec(['ssh', targetHost, config.startWorker.cmd, config.pwd, masterHost, masterPort].join(' '),
+  exec(['ssh', config.ssh_options, targetHost, config.startWorker.cmd, config.pwd, masterHost, masterPort].join(' '),
        config.startWorker.options,
        function(err, stdout, stderr) {
     if(err !== null) {
