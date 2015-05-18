@@ -72,6 +72,19 @@ var server = net.createServer(function(socket) {
   }
 });
 
+function resolve(name) {
+  if(net.isIP(name)) {
+    return name;
+  } else {
+    for(var ip in workers) {
+      if(workers[ip].hostname == name) {
+        return ip;
+      }
+    }
+    return name;
+  }
+}
+
 function execCmd(cmd) {
   var cmdArgs = cmd.toString().trim().split(' ');
   switch(cmdArgs[0]) {
@@ -105,11 +118,12 @@ function execCmd(cmd) {
       console.log('Total %d', i);
       break;
     case 'kill':
-      var w = workers[cmdArgs[1]];
+      var name = resolve(cmdArgs[1]);
+      var w = workers[name];
       if(w !== undefined) {
         send(w.socket, {action: 'kill'});
       } else {
-        console.log('Unknown worker %s', cmdArgs[1]);
+        console.log('Unknown worker %s (%s)', cmdArgs[1], name);
       }
       break;
     case 'spread':
@@ -136,6 +150,15 @@ function execCmd(cmd) {
       break;
     case 'start':
       newJob(cmdArgs.slice(1).join(' '));
+      break;
+    case 'startOn':
+      var name = resolve(cmdArgs[1]);
+      newJob(cmdArgs.slice(2).join(' '), name);
+      break;
+    case 'startAll':
+      for(var ip in workers) {
+        newJob(cmdArgs.slice(1).join(' '), ip);
+      }
       break;
     default:
       console.log('Unknown command "%s"', cmdArgs[0]);
@@ -194,17 +217,31 @@ global.on('deletedWorker', function() {
 
 global.on('jobUpdate', function() {
   var toLaunch = [];
+  var affinity = {};
   for(var id in jobs) {
-    if(jobs[id].status == 'prelaunch' && jobs[id].affinity === undefined) {
-      toLaunch.push(id);
+    var j = jobs[id];
+    if(j.status == 'prelaunch') {
+      if(j.affinity !== undefined) {
+        if(affinity[j.affinity] !== undefined) {
+          affinity[j.affinity].push(id);
+        } else {
+          affinity[j.affinity] = [id];
+        }
+      } else {
+        toLaunch.push(id);
+      }
     }
   }
   for(var ip in workers) {
-    if(toLaunch.length == 0) {
-      break;
-    }
     var w = workers[ip];
     if(w.init) {
+      while(w.jobs < w.cpus - 1 && affinity[ip] !== undefined && affinity[ip].length > 0) {
+        w.jobs++;
+        var jId = affinity[ip].pop();
+        var j = jobs[jId];
+        send(w.socket, {action: 'start', cmd: j.cmd, jobId: jId});
+        j.status = 'running';
+      }
       while(w.jobs < w.cpus - 1 && toLaunch.length > 0) {
         w.jobs++;
         var jId = toLaunch.pop();
