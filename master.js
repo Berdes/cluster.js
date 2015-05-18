@@ -38,10 +38,10 @@ var server = net.createServer(function(socket) {
               break;
             case 'end':
               if(data.status == 'error') {
-                log.push(util.format('Job %s ended with failure (err, out) : %s\n%s',
-                      data.job, data.err, data.output));
+                log.push(util.format('Job %s ended on %s with failure (err, out) : %s\n%s',
+                      data.job, jobs[data.job].hostname, data.err, data.output));
               } else {
-                log.push(util.format('Job %s ended : %s', data.job, data.output));
+                log.push(util.format('Job %s ended on %s : %s', data.job, jobs[data.job].hostname, data.output));
               }
               delete jobs[data.job];
               w.jobs--;
@@ -241,6 +241,7 @@ global.on('jobUpdate', function() {
         var j = jobs[jId];
         send(w.socket, {action: 'start', cmd: j.cmd, jobId: jId});
         j.status = 'running';
+        j.hostname = w.hostname;
       }
       while(w.jobs < w.cpus - 1 && toLaunch.length > 0) {
         w.jobs++;
@@ -248,6 +249,7 @@ global.on('jobUpdate', function() {
         var j = jobs[jId];
         send(w.socket, {action: 'start', cmd: j.cmd, jobId: jId});
         j.status = 'running';
+        j.hostname = w.hostname;
       }
     }
   }

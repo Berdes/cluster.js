@@ -29,7 +29,7 @@ var socket = net.connect(masterPort, masterHost, function() {
                   action: 'end',
                   job: data.jobId,
                   status: 'error',
-                  err: err+'\n'+stderr.toString(),
+                  err: '('+err.code+') '+err+'\n'+stderr.toString(),
                   output: stdout.toString()
                 });
               } else {
